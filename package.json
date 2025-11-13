@@ -1,0 +1,38 @@
+{
+  "name": "crypto-wallet-monitor",
+  "version": "1.0.0",
+  "description": "Monitoreo de las carteras más grandes de Bitcoin y Ethereum",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "extract": "ts-node src/jobs/extractWallets.ts",
+    "monitor": "ts-node src/jobs/monitorTopWallets.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "bitcoin",
+    "ethereum",
+    "cryptocurrency",
+    "wallet",
+    "monitoring"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.6.2",
+    "dotenv": "^16.3.1",
+    "node-cron": "^3.0.3",
+    "pg": "^8.11.3",
+    "typeorm": "^0.3.17",
+    "winston": "^3.11.0",
+    "reflect-metadata": "^0.1.13"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.5",
+    "@types/node-cron": "^3.0.11",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
+  }
+}
