@@ -1,3 +1,5 @@
+import { TransactionType } from '../entities/Transaction';
+
 export interface BlockchairAddress {
   address: string;
   balance: number;
@@ -44,7 +46,7 @@ export interface WalletData {
 
 export interface TransactionData {
   txHash: string;
-  type: 'BUY' | 'SELL' | 'TRANSFER_IN' | 'TRANSFER_OUT';
+  type: TransactionType;
   amount: number;
   timestamp: Date;
   fromAddress?: string;

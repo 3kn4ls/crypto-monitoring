@@ -10,6 +10,9 @@
     "api": "ts-node src/api/server.ts",
     "extract": "ts-node src/jobs/extractWallets.ts",
     "monitor": "ts-node src/jobs/monitorTopWallets.ts",
+    "backfill-prices": "ts-node src/jobs/backfillPrices.ts",
+    "reanalyze": "ts-node src/jobs/reanalyzePerformance.ts",
+    "clean-db": "ts-node src/jobs/cleanDatabase.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [

@@ -9,7 +9,8 @@ export class EthereumService {
 
   constructor() {
     this.apiKey = process.env.ETHERSCAN_API_KEY || '';
-    this.apiClient = new ApiClient('https://api.etherscan.io/api', 1500);
+    // Usar API V2 de Etherscan
+    this.apiClient = new ApiClient('https://api.etherscan.io/v2/api', 1500);
   }
 
   /**
@@ -52,9 +53,10 @@ export class EthereumService {
    */
   async getWalletDetails(address: string): Promise<WalletData | null> {
     try {
-      // Obtener balance
+      // Obtener balance usando API V2
       const balanceResponse: any = await this.apiClient.get('', {
         params: {
+          chainid: '1',
           module: 'account',
           action: 'balance',
           address,
@@ -63,16 +65,18 @@ export class EthereumService {
         },
       });
 
-      if (balanceResponse.status !== '1') {
+      // En API V2, la estructura de respuesta puede ser diferente
+      if (!balanceResponse || balanceResponse.status === '0') {
         logger.warn(`No se pudo obtener balance de ${address}`);
         return null;
       }
 
-      const balance = weiToEth(balanceResponse.result);
+      const balance = weiToEth(balanceResponse.result || '0');
 
       // Obtener conteo de transacciones
       const txCountResponse: any = await this.apiClient.get('', {
         params: {
+          chainid: '1',
           module: 'proxy',
           action: 'eth_getTransactionCount',
           address,
@@ -98,6 +102,7 @@ export class EthereumService {
 
   /**
    * Obtiene transacciones de una cartera
+   * Solo devuelve transacciones de los últimos 365 días para compatibilidad con CoinGecko API gratuita
    */
   async getWalletTransactions(
     address: string,
@@ -107,6 +112,7 @@ export class EthereumService {
     try {
       const response: any = await this.apiClient.get('', {
         params: {
+          chainid: '1',
           module: 'account',
           action: 'txlist',
           address,
@@ -117,11 +123,17 @@ export class EthereumService {
         },
       });
 
-      if (response.status !== '1' || !response.result) {
+      if (response.status === '0' || !response.result) {
         return [];
       }
 
+      // Calcular fecha límite (365 días atrás)
+      const oneYearAgo = new Date();
+      oneYearAgo.setDate(oneYearAgo.getDate() - 365);
+      const oneYearAgoTimestamp = Math.floor(oneYearAgo.getTime() / 1000);
+
       const transactions: TransactionData[] = response.result
+        .filter((tx: EtherscanTransaction) => parseInt(tx.timeStamp) >= oneYearAgoTimestamp) // Solo últimos 365 días
         .slice(0, 1000) // Limitar a 1000 transacciones más recientes
         .map((tx: EtherscanTransaction) => {
           const amount = weiToEth(tx.value);
@@ -138,6 +150,8 @@ export class EthereumService {
             fee,
           };
         });
+
+      logger.info(`Filtradas ${transactions.length} transacciones de los últimos 365 días para ${address}`);
 
       return transactions;
     } catch (error) {

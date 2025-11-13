@@ -3,6 +3,7 @@ import { Wallet, CryptoType } from '../entities/Wallet';
 import { Transaction } from '../entities/Transaction';
 import { BitcoinService } from './BitcoinService';
 import { EthereumService } from './EthereumService';
+import { PriceService } from './PriceService';
 import logger from '../config/logger';
 import { WalletData, TransactionData } from '../types';
 
@@ -11,10 +12,12 @@ export class WalletExtractor {
   private transactionRepo = AppDataSource.getRepository(Transaction);
   private bitcoinService: BitcoinService;
   private ethereumService: EthereumService;
+  private priceService: PriceService;
 
   constructor() {
     this.bitcoinService = new BitcoinService();
     this.ethereumService = new EthereumService();
+    this.priceService = new PriceService();
   }
 
   /**
@@ -97,10 +100,14 @@ export class WalletExtractor {
       wallet.firstSeen = walletData.firstSeen || wallet.firstSeen;
       wallet.lastActivity = walletData.lastActivity || wallet.lastActivity;
 
-      // Calcular balance en USD (esto requeriría una API de precios)
-      // Por ahora, usamos valores aproximados
-      const priceUsd = cryptoType === CryptoType.BITCOIN ? 45000 : 2500;
-      wallet.balanceUsd = walletData.balance * priceUsd;
+      // Calcular balance en USD usando precio actual
+      try {
+        const priceUsd = await this.priceService.getCurrentPrice(cryptoType);
+        wallet.balanceUsd = walletData.balance * priceUsd;
+      } catch (error) {
+        logger.warn(`Error obteniendo precio actual para ${cryptoType}, usando 0`);
+        wallet.balanceUsd = 0;
+      }
 
       await this.walletRepo.save(wallet);
       return wallet;
@@ -133,9 +140,9 @@ export class WalletExtractor {
         );
       }
 
-      // Guardar transacciones
+      // Guardar transacciones con precios históricos
       for (const txData of transactionsData) {
-        await this.saveTransaction(wallet, txData);
+        await this.saveTransaction(wallet, txData, cryptoType);
       }
 
       logger.info(
@@ -151,7 +158,8 @@ export class WalletExtractor {
    */
   private async saveTransaction(
     wallet: Wallet,
-    txData: TransactionData
+    txData: TransactionData,
+    cryptoType: CryptoType
   ): Promise<void> {
     try {
       // Verificar si ya existe
@@ -163,17 +171,35 @@ export class WalletExtractor {
         return; // Ya existe, no duplicar
       }
 
-      const transaction = this.transactionRepo.create({
-        walletId: wallet.id,
-        txHash: txData.txHash,
-        type: txData.type,
-        amount: txData.amount,
-        timestamp: txData.timestamp,
-        fromAddress: txData.fromAddress,
-        toAddress: txData.toAddress,
-        blockNumber: txData.blockNumber,
-        fee: txData.fee,
-      });
+      // Obtener precio histórico en la fecha de la transacción
+      let priceAtTransaction = null;
+      let amountUsd = null;
+
+      try {
+        priceAtTransaction = await this.priceService.getHistoricalPrice(
+          cryptoType,
+          txData.timestamp
+        );
+        amountUsd = txData.amount * priceAtTransaction;
+      } catch (error) {
+        logger.warn(
+          `No se pudo obtener precio histórico para ${txData.txHash} en ${txData.timestamp.toISOString()}`
+        );
+      }
+
+      const transaction = this.transactionRepo.create();
+      transaction.wallet = wallet;
+      transaction.walletId = wallet.id;
+      transaction.txHash = txData.txHash;
+      transaction.type = txData.type;
+      transaction.amount = txData.amount;
+      transaction.amountUsd = amountUsd!;
+      transaction.priceAtTransaction = priceAtTransaction!;
+      transaction.timestamp = txData.timestamp;
+      transaction.fromAddress = txData.fromAddress!;
+      transaction.toAddress = txData.toAddress!;
+      transaction.blockNumber = txData.blockNumber!;
+      transaction.fee = txData.fee!;
 
       await this.transactionRepo.save(transaction);
     } catch (error) {

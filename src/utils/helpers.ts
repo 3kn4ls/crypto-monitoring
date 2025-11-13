@@ -37,22 +37,38 @@ export function calculatePerformanceScore(metrics: {
   winRate: number;
   transactionCount: number;
   avgHoldingPeriodDays: number;
+  balance?: number;
+  volume?: number;
 }): number {
-  // Fórmula de puntuación ponderada
-  const profitWeight = 0.4;
-  const winRateWeight = 0.3;
+  // Fórmula de puntuación ponderada mejorada
+  const profitWeight = 0.3;
+  const winRateWeight = 0.2;
   const activityWeight = 0.2;
+  const balanceWeight = 0.2;
   const holdingWeight = 0.1;
 
+  // Score de profit/loss: normalizar entre 0-100
   const profitScore = Math.max(0, Math.min(100, metrics.profitLossPercentage + 50));
-  const winRateScore = metrics.winRate;
+
+  // Score de win rate: directamente es un porcentaje 0-100
+  const winRateScore = Math.max(0, Math.min(100, metrics.winRate));
+
+  // Score de actividad: basado en número de transacciones
   const activityScore = Math.min(100, (metrics.transactionCount / 1000) * 100);
-  const holdingScore = Math.min(100, (metrics.avgHoldingPeriodDays / 365) * 100);
+
+  // Score de balance: mayor balance = mejor score
+  const balanceScore = metrics.balance
+    ? Math.min(100, Math.log10(metrics.balance + 1) * 10)
+    : 0;
+
+  // Score de holding: períodos más largos pueden ser buenos o malos
+  const holdingScore = Math.min(100, (metrics.avgHoldingPeriodDays / 180) * 100);
 
   return (
     profitScore * profitWeight +
     winRateScore * winRateWeight +
     activityScore * activityWeight +
+    balanceScore * balanceWeight +
     holdingScore * holdingWeight
   );
 }

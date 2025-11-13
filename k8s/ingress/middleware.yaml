@@ -6,5 +6,5 @@ metadata:
 spec:
   stripPrefix:
     prefixes:
-      - /crypto/api
+      - /crypto
     forceSlash: false

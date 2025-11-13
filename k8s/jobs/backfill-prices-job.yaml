@@ -1,0 +1,31 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: backfill-prices
+  namespace: crypto-monitoring
+spec:
+  template:
+    spec:
+      containers:
+      - name: backfill-prices
+        image: crypto-backend:price-service
+        imagePullPolicy: IfNotPresent
+        command: ["node"]
+        args: ["dist/jobs/backfillPrices.js"]
+        envFrom:
+        - configMapRef:
+            name: backend-config
+        - secretRef:
+            name: backend-secret
+        env:
+        - name: NODE_ENV
+          value: "development"  # Para ver logs en consola
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      restartPolicy: Never
+  backoffLimit: 2

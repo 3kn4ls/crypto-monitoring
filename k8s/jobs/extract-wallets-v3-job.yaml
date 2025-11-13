@@ -1,0 +1,31 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: extract-wallets-v3
+  namespace: crypto-monitoring
+spec:
+  template:
+    spec:
+      containers:
+      - name: extract-wallets
+        image: crypto-backend:recent-tx
+        imagePullPolicy: IfNotPresent
+        command: ["node"]
+        args: ["dist/jobs/extractWallets.js"]
+        envFrom:
+        - configMapRef:
+            name: backend-config
+        - secretRef:
+            name: backend-secret
+        env:
+        - name: NODE_ENV
+          value: "development"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+      restartPolicy: Never
+  backoffLimit: 2

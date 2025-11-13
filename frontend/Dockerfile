@@ -18,8 +18,8 @@ RUN npm run build:prod
 # Stage 2: Serve with Nginx
 FROM nginx:alpine
 
-# Copy built app to nginx
-COPY --from=build /app/dist/crypto-wallet-monitor-frontend /usr/share/nginx/html
+# Copy built app to nginx (Angular 19 outputs to browser/ subdirectory)
+COPY --from=build /app/dist/crypto-wallet-monitor-frontend/browser /usr/share/nginx/html
 
 # Copy nginx config
 COPY nginx.conf /etc/nginx/conf.d/default.conf
