@@ -1,14 +1,7 @@
 node_modules
 dist
-logs
 .git
-.env
-*.log
 .DS_Store
 coverage
 .vscode
 .idea
-k8s
-scripts
-frontend
-README.md

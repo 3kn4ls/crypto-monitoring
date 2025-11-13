@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+  namespace: crypto-monitoring
+data:
+  POSTGRES_DB: crypto_monitoring
+  POSTGRES_USER: postgres
