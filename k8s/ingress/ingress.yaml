@@ -5,19 +5,19 @@ metadata:
   namespace: crypto-monitoring
   annotations:
     kubernetes.io/ingress.class: traefik
+    traefik.ingress.kubernetes.io/router.middlewares: crypto-monitoring-strip-crypto-api@kubernetescrd
 spec:
   rules:
-  - host: crypto-monitor.local
-    http:
+  - http:
       paths:
-      - path: /api
+      - path: /crypto/api
         pathType: Prefix
         backend:
           service:
             name: backend
             port:
               number: 3000
-      - path: /
+      - path: /crypto
         pathType: Prefix
         backend:
           service:

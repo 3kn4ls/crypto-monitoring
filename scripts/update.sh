@@ -199,9 +199,8 @@ show_access_info() {
     echo -e "${GREEN}========================================${NC}\n"
 
     echo -e "${BLUE}Acceso a la aplicación:${NC}"
-    echo -e "  - Local: ${GREEN}http://crypto-monitor.local${NC}"
-    echo -e "  - IP:    ${GREEN}http://${IP_ADDRESS}${NC}"
-    echo -e "  - API:   ${GREEN}http://${IP_ADDRESS}/api${NC}\n"
+    echo -e "  - Frontend: ${GREEN}http://${IP_ADDRESS}/crypto${NC}"
+    echo -e "  - API:      ${GREEN}http://${IP_ADDRESS}/crypto/api${NC}\n"
 
     echo -e "${BLUE}Comandos útiles:${NC}"
     echo -e "  - Ver pods:          ${YELLOW}sudo k3s kubectl get pods -n $NAMESPACE${NC}"

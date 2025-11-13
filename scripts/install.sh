@@ -203,16 +203,9 @@ deploy_application() {
     log_info "✓ Aplicación desplegada correctamente"
 }
 
-# Configurar /etc/hosts
+# Configurar /etc/hosts (ya no es necesario con la nueva configuración)
 configure_hosts() {
-    log_info "Configurando /etc/hosts..."
-
-    if ! grep -q "crypto-monitor.local" /etc/hosts; then
-        echo "127.0.0.1 crypto-monitor.local" | sudo tee -a /etc/hosts
-        log_info "✓ /etc/hosts configurado"
-    else
-        log_warn "crypto-monitor.local ya está en /etc/hosts"
-    fi
+    log_info "✓ Configuración de red completada"
 }
 
 # Mostrar información de acceso
@@ -224,9 +217,8 @@ show_access_info() {
     echo -e "${GREEN}========================================${NC}\n"
 
     echo -e "${BLUE}Acceso a la aplicación:${NC}"
-    echo -e "  - Local: ${GREEN}http://crypto-monitor.local${NC}"
-    echo -e "  - IP:    ${GREEN}http://${IP_ADDRESS}${NC}"
-    echo -e "  - API:   ${GREEN}http://${IP_ADDRESS}/api${NC}\n"
+    echo -e "  - Frontend: ${GREEN}http://${IP_ADDRESS}/crypto${NC}"
+    echo -e "  - API:      ${GREEN}http://${IP_ADDRESS}/crypto/api${NC}\n"
 
     echo -e "${BLUE}Comandos útiles:${NC}"
     echo -e "  - Ver pods:       ${YELLOW}sudo k3s kubectl get pods -n $NAMESPACE${NC}"

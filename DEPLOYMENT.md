@@ -73,9 +73,11 @@ El despliegue incluye:
 
 Después de la instalación, puedes acceder a:
 
-- **Frontend:** http://crypto-monitor.local o http://IP_DE_TU_PI
-- **API:** http://IP_DE_TU_PI/api
-- **Health Check:** http://IP_DE_TU_PI/health
+- **Frontend:** http://IP_DE_TU_PI/crypto
+- **API:** http://IP_DE_TU_PI/crypto/api
+- **Health Check Backend:** http://IP_DE_TU_PI/crypto/api/health
+
+**Nota:** La aplicación está configurada para funcionar en la ruta `/crypto` para facilitar la convivencia con otras aplicaciones en el mismo servidor.
 
 ### Configurar acceso desde otros dispositivos
 
@@ -88,7 +90,7 @@ hostname -I
 
 2. En tu dispositivo móvil/PC, navega a:
 ```
-http://IP_DE_TU_PI
+http://IP_DE_TU_PI/crypto
 ```
 
 ## 🔄 Actualización

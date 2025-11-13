@@ -1,0 +1,23 @@
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: crypto-monitoring-route
+  namespace: crypto-monitoring
+spec:
+  entryPoints:
+    - web
+  routes:
+    # API route con strip prefix
+    - match: PathPrefix(`/crypto/api`)
+      kind: Rule
+      services:
+        - name: backend
+          port: 3000
+      middlewares:
+        - name: strip-crypto-api
+    # Frontend route
+    - match: PathPrefix(`/crypto`)
+      kind: Rule
+      services:
+        - name: frontend
+          port: 80
