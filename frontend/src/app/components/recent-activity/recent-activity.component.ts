@@ -38,13 +38,13 @@ import { Transaction, TransactionType } from '../../models/wallet.model';
               {{ getTransactionIcon(tx.type) }}
             </mat-icon>
             <div matListItemTitle class="transaction-title">
-              <mat-chip [class]="tx.wallet?.cryptoType.toLowerCase()">
+              <mat-chip [class]="tx.wallet?.cryptoType?.toLowerCase() || 'unknown'">
                 {{ tx.wallet?.cryptoType === 'BITCOIN' ? 'BTC' : 'ETH' }}
               </mat-chip>
               <span class="amount">{{ tx.amount | number:'1.4-4' }}</span>
             </div>
             <div matListItemLine class="transaction-details">
-              <span class="address">{{ tx.wallet?.address | slice:0:12 }}...</span>
+              <span class="address">{{ getWalletAddress(tx.wallet?.address) }}</span>
               <span class="time">{{ getTimeAgo(tx.timestamp) }}</span>
             </div>
           </mat-list-item>
@@ -210,5 +210,10 @@ export class RecentActivityComponent implements OnInit {
     if (hours > 0) return `${hours}h`;
     if (minutes > 0) return `${minutes}m`;
     return 'Ahora';
+  }
+
+  getWalletAddress(address: string | undefined): string {
+    if (!address) return 'Unknown';
+    return address.substring(0, 12) + '...';
   }
 }
