@@ -16,23 +16,56 @@ interface CoinGeckoHistoricalResponse {
   };
 }
 
+interface CryptoCompareHistoricalResponse {
+  Data?: {
+    Data?: Array<{
+      time: number;
+      close: number;
+    }>;
+  };
+}
+
+interface BinanceKlineResponse extends Array<any> {
+  [4]: string; // close price
+}
+
+enum PriceSource {
+  COINGECKO = 'coingecko',
+  CRYPTOCOMPARE = 'cryptocompare',
+  BINANCE = 'binance',
+}
+
 /**
- * Servicio para obtener precios de criptomonedas usando CoinGecko API (gratuita)
+ * Servicio mejorado para obtener precios de criptomonedas con múltiples fuentes
  *
- * Límites de la API gratuita:
- * - 10-50 llamadas por minuto
- * - No requiere API key para funcionalidad básica
+ * Fuentes disponibles (en orden de prioridad):
+ * 1. CoinGecko API (primaria) - 10-50 llamadas/min, no requiere API key
+ * 2. CryptoCompare API (fallback) - ~100k llamadas/mes, requiere API key gratuita
+ * 3. Binance API (fallback) - Sin límite para datos públicos, sin API key
  *
- * Documentación: https://www.coingecko.com/en/api/documentation
+ * Documentación:
+ * - CoinGecko: https://www.coingecko.com/en/api/documentation
+ * - CryptoCompare: https://min-api.cryptocompare.com/documentation
+ * - Binance: https://binance-docs.github.io/apidocs/spot/en/
  */
 export class PriceService {
-  private apiClient: ApiClient;
-  private priceCache: Map<string, { price: number; timestamp: number }>;
+  private coinGeckoClient: ApiClient;
+  private cryptoCompareClient: ApiClient;
+  private binanceClient: ApiClient;
+  private priceCache: Map<string, { price: number; timestamp: number; source: PriceSource }>;
   private readonly CACHE_DURATION_MS = 60000; // 1 minuto
+  private readonly CRYPTOCOMPARE_API_KEY = process.env.CRYPTOCOMPARE_API_KEY || '';
 
   constructor() {
-    // CoinGecko API gratuita
-    this.apiClient = new ApiClient('https://api.coingecko.com/api/v3', 2000);
+    // CoinGecko API gratuita (fuente primaria)
+    this.coinGeckoClient = new ApiClient('https://api.coingecko.com/api/v3', 2000);
+
+    // CryptoCompare API (fallback 1)
+    this.cryptoCompareClient = new ApiClient('https://min-api.cryptocompare.com/data', 1500);
+
+    // Binance API (fallback 2)
+    this.binanceClient = new ApiClient('https://api.binance.com/api/v3', 1000);
+
     this.priceCache = new Map();
   }
 
@@ -45,6 +78,34 @@ export class PriceService {
         return 'bitcoin';
       case CryptoType.ETHEREUM:
         return 'ethereum';
+      default:
+        throw new Error(`Tipo de cripto no soportado: ${cryptoType}`);
+    }
+  }
+
+  /**
+   * Convierte CryptoType a símbolo de CryptoCompare
+   */
+  private getCryptoCompareSymbol(cryptoType: CryptoType): string {
+    switch (cryptoType) {
+      case CryptoType.BITCOIN:
+        return 'BTC';
+      case CryptoType.ETHEREUM:
+        return 'ETH';
+      default:
+        throw new Error(`Tipo de cripto no soportado: ${cryptoType}`);
+    }
+  }
+
+  /**
+   * Convierte CryptoType a símbolo de Binance
+   */
+  private getBinanceSymbol(cryptoType: CryptoType): string {
+    switch (cryptoType) {
+      case CryptoType.BITCOIN:
+        return 'BTCUSDT';
+      case CryptoType.ETHEREUM:
+        return 'ETHUSDT';
       default:
         throw new Error(`Tipo de cripto no soportado: ${cryptoType}`);
     }
@@ -65,7 +126,7 @@ export class PriceService {
       }
 
       // Obtener precio actual
-      const response = await this.apiClient.get<CoinGeckoPriceResponse>('/simple/price', {
+      const response = await this.coinGeckoClient.get<CoinGeckoPriceResponse>('/simple/price', {
         params: {
           ids: coinId,
           vs_currencies: 'usd',
@@ -78,7 +139,7 @@ export class PriceService {
       }
 
       // Guardar en caché
-      this.priceCache.set(cacheKey, { price, timestamp: Date.now() });
+      this.priceCache.set(cacheKey, { price, timestamp: Date.now(), source: PriceSource.COINGECKO });
 
       logger.debug(`Precio actual de ${cryptoType}: $${price}`);
       return price;
@@ -89,34 +150,112 @@ export class PriceService {
   }
 
   /**
+   * Obtiene precio histórico desde CryptoCompare (fallback 1)
+   */
+  private async getHistoricalPriceFromCryptoCompare(
+    cryptoType: CryptoType,
+    date: Date
+  ): Promise<number | null> {
+    try {
+      const symbol = this.getCryptoCompareSymbol(cryptoType);
+      const timestamp = Math.floor(date.getTime() / 1000);
+
+      const params: any = {
+        fsym: symbol,
+        tsym: 'USD',
+        limit: 1,
+        toTs: timestamp,
+      };
+
+      // Agregar API key si está disponible
+      if (this.CRYPTOCOMPARE_API_KEY) {
+        params.api_key = this.CRYPTOCOMPARE_API_KEY;
+      }
+
+      const response = await this.cryptoCompareClient.get<CryptoCompareHistoricalResponse>(
+        '/histoday',
+        { params }
+      );
+
+      const dataPoints = response.Data?.Data;
+      if (dataPoints && dataPoints.length > 0) {
+        const price = dataPoints[0].close;
+        logger.debug(`[CryptoCompare] Precio histórico de ${cryptoType}: $${price}`);
+        return price;
+      }
+
+      return null;
+    } catch (error) {
+      logger.warn(`[CryptoCompare] Error obteniendo precio histórico:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Obtiene precio histórico desde Binance (fallback 2)
+   */
+  private async getHistoricalPriceFromBinance(
+    cryptoType: CryptoType,
+    date: Date
+  ): Promise<number | null> {
+    try {
+      const symbol = this.getBinanceSymbol(cryptoType);
+      const startTime = date.getTime();
+      const endTime = startTime + 86400000; // +1 día
+
+      const response = await this.binanceClient.get<BinanceKlineResponse[]>('/klines', {
+        params: {
+          symbol,
+          interval: '1d',
+          startTime,
+          endTime,
+          limit: 1,
+        },
+      });
+
+      if (response && response.length > 0) {
+        const price = parseFloat(response[0][4]); // close price
+        logger.debug(`[Binance] Precio histórico de ${cryptoType}: $${price}`);
+        return price;
+      }
+
+      return null;
+    } catch (error) {
+      logger.warn(`[Binance] Error obteniendo precio histórico:`, error);
+      return null;
+    }
+  }
+
+  /**
    * Obtiene el precio histórico de una criptomoneda en una fecha específica
+   * Utiliza múltiples fuentes con sistema de fallback
    *
    * @param cryptoType Tipo de criptomoneda
    * @param date Fecha para obtener el precio
-   * @returns Precio en USD en esa fecha
+   * @returns Precio en USD en esa fecha, o null si no se pudo obtener
    */
-  async getHistoricalPrice(cryptoType: CryptoType, date: Date): Promise<number> {
+  async getHistoricalPrice(cryptoType: CryptoType, date: Date): Promise<number | null> {
+    const coinId = this.getCoinId(cryptoType);
+
+    // Formatear fecha en formato DD-MM-YYYY (requerido por CoinGecko)
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    const dateStr = `${day}-${month}-${year}`;
+
+    const cacheKey = `${coinId}_${dateStr}`;
+
+    // Verificar caché (precios históricos son inmutables)
+    const cached = this.priceCache.get(cacheKey);
+    if (cached) {
+      return cached.price;
+    }
+
+    // Intentar CoinGecko primero
     try {
-      const coinId = this.getCoinId(cryptoType);
+      logger.debug(`[CoinGecko] Obteniendo precio histórico de ${cryptoType} para ${dateStr}...`);
 
-      // Formatear fecha en formato DD-MM-YYYY (requerido por CoinGecko)
-      const day = String(date.getDate()).padStart(2, '0');
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const year = date.getFullYear();
-      const dateStr = `${day}-${month}-${year}`;
-
-      const cacheKey = `${coinId}_${dateStr}`;
-
-      // Verificar caché (precios históricos son inmutables, caché indefinido)
-      const cached = this.priceCache.get(cacheKey);
-      if (cached) {
-        return cached.price;
-      }
-
-      logger.debug(`Obteniendo precio histórico de ${cryptoType} para ${dateStr}...`);
-
-      // Obtener precio histórico
-      const response = await this.apiClient.get<CoinGeckoHistoricalResponse>(
+      const response = await this.coinGeckoClient.get<CoinGeckoHistoricalResponse>(
         `/coins/${coinId}/history`,
         {
           params: {
@@ -127,27 +266,46 @@ export class PriceService {
       );
 
       const price = response.market_data?.current_price?.usd;
-      if (!price) {
-        throw new Error(`No se pudo obtener precio histórico para ${coinId} en ${dateStr}`);
+      if (price) {
+        this.priceCache.set(cacheKey, { price, timestamp: Date.now(), source: PriceSource.COINGECKO });
+        logger.debug(`[CoinGecko] Precio histórico de ${cryptoType} (${dateStr}): $${price}`);
+        return price;
       }
-
-      // Guardar en caché (sin expiración para precios históricos)
-      this.priceCache.set(cacheKey, { price, timestamp: Date.now() });
-
-      logger.debug(`Precio histórico de ${cryptoType} (${dateStr}): $${price}`);
-      return price;
     } catch (error) {
-      logger.error(`Error obteniendo precio histórico de ${cryptoType}:`, error);
-
-      // Fallback: intentar obtener precio actual si la fecha es muy reciente
-      const daysDiff = Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24));
-      if (daysDiff < 1) {
-        logger.warn('Fecha muy reciente, usando precio actual como aproximación');
-        return await this.getCurrentPrice(cryptoType);
-      }
-
-      throw error;
+      logger.warn(`[CoinGecko] Error obteniendo precio histórico de ${cryptoType}:`, error);
     }
+
+    // Fallback 1: CryptoCompare
+    const cryptoComparePrice = await this.getHistoricalPriceFromCryptoCompare(cryptoType, date);
+    if (cryptoComparePrice) {
+      this.priceCache.set(cacheKey, {
+        price: cryptoComparePrice,
+        timestamp: Date.now(),
+        source: PriceSource.CRYPTOCOMPARE,
+      });
+      return cryptoComparePrice;
+    }
+
+    // Fallback 2: Binance
+    const binancePrice = await this.getHistoricalPriceFromBinance(cryptoType, date);
+    if (binancePrice) {
+      this.priceCache.set(cacheKey, {
+        price: binancePrice,
+        timestamp: Date.now(),
+        source: PriceSource.BINANCE,
+      });
+      return binancePrice;
+    }
+
+    // Fallback 3: Si la fecha es muy reciente (< 1 día), usar precio actual
+    const daysDiff = Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24));
+    if (daysDiff < 1) {
+      logger.warn(`No se pudo obtener precio histórico para ${dateStr}, usando precio actual como aproximación`);
+      return await this.getCurrentPrice(cryptoType);
+    }
+
+    logger.error(`No se pudo obtener precio histórico de ${cryptoType} para ${dateStr} desde ninguna fuente`);
+    return null; // Retornar null en lugar de throw para no detener el procesamiento
   }
 
   /**
@@ -170,7 +328,9 @@ export class PriceService {
       try {
         const date = new Date(dateStr);
         const price = await this.getHistoricalPrice(cryptoType, date);
-        prices.set(dateStr, price);
+        if (price !== null) {
+          prices.set(dateStr, price);
+        }
 
         // Pequeña pausa para respetar rate limits
         await new Promise(resolve => setTimeout(resolve, 1500));
@@ -185,6 +345,7 @@ export class PriceService {
 
   /**
    * Calcula el valor USD de una cantidad de cripto en una fecha específica
+   * @returns Valor en USD, o 0 si no se pudo obtener el precio
    */
   async calculateUsdValue(
     amount: number,
@@ -192,7 +353,7 @@ export class PriceService {
     date: Date
   ): Promise<number> {
     const price = await this.getHistoricalPrice(cryptoType, date);
-    return amount * price;
+    return price ? amount * price : 0;
   }
 
   /**

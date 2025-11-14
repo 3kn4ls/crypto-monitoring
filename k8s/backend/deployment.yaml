@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: backend
-        image: crypto-backend:recent-tx
+        image: crypto-backend:v3-fixed
         imagePullPolicy: IfNotPresent
         command: ["node"]
         args: ["dist/api/server.js"]

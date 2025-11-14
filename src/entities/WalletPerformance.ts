@@ -29,7 +29,7 @@ export class WalletPerformance {
   @Index()
   analysisDate: Date;
 
-  @Column('decimal', { precision: 10, scale: 2, default: 0 })
+  @Column('decimal', { precision: 15, scale: 2, default: 0 })
   profitLossPercentage: number;
 
   @Column('decimal', { precision: 20, scale: 2, default: 0 })
@@ -58,6 +58,19 @@ export class WalletPerformance {
 
   @Column('decimal', { precision: 10, scale: 2, default: 0 })
   performanceScore: number;
+
+  // Métricas de calidad de datos
+  @Column({ type: 'int', default: 0 })
+  transactionsWithPrice: number; // Cantidad de transacciones con precio USD
+
+  @Column({ type: 'int', default: 0 })
+  totalTransactions: number; // Total de transacciones analizadas
+
+  @Column('decimal', { precision: 5, scale: 2, default: 0 })
+  dataQualityScore: number; // % de transacciones con precio (0-100)
+
+  @Column({ type: 'varchar', length: 20, default: 'unknown' })
+  dataQuality: string; // 'excellent' (>80%), 'good' (50-80%), 'fair' (20-50%), 'poor' (<20%), 'insufficient' (<10%)
 
   @Column({ type: 'jsonb', nullable: true })
   metadata: any;

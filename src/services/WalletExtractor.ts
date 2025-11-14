@@ -172,15 +172,17 @@ export class WalletExtractor {
       }
 
       // Obtener precio histórico en la fecha de la transacción
-      let priceAtTransaction = null;
-      let amountUsd = null;
+      let priceAtTransaction: number | null = null;
+      let amountUsd: number | null = null;
 
       try {
         priceAtTransaction = await this.priceService.getHistoricalPrice(
           cryptoType,
           txData.timestamp
         );
-        amountUsd = txData.amount * priceAtTransaction;
+        if (priceAtTransaction !== null) {
+          amountUsd = txData.amount * priceAtTransaction;
+        }
       } catch (error) {
         logger.warn(
           `No se pudo obtener precio histórico para ${txData.txHash} en ${txData.timestamp.toISOString()}`

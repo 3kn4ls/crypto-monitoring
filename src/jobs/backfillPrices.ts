@@ -58,11 +58,15 @@ async function backfillPrices() {
         // Obtener precio histórico
         const price = await priceService.getHistoricalPrice(wallet.cryptoType, tx.timestamp);
 
-        // Actualizar transacción
-        tx.priceAtTransaction = price;
-        tx.amountUsd = (typeof tx.amount === 'string' ? parseFloat(tx.amount) : tx.amount) * price;
-
-        await transactionRepo.save(tx);
+        // Actualizar transacción solo si se obtuvo el precio
+        if (price !== null) {
+          tx.priceAtTransaction = price;
+          tx.amountUsd = (typeof tx.amount === 'string' ? parseFloat(tx.amount) : tx.amount) * price;
+          await transactionRepo.save(tx);
+        } else {
+          logger.warn(`No se pudo obtener precio para transacción ${tx.txHash}`);
+          continue;
+        }
 
         updated++;
 

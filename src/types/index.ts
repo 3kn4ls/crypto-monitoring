@@ -65,4 +65,8 @@ export interface PerformanceMetrics {
   winRate: number;
   avgHoldingPeriodDays: number;
   performanceScore: number;
+  transactionsWithPrice: number;
+  totalTransactions: number;
+  dataQualityScore: number;
+  dataQuality: string;
 }

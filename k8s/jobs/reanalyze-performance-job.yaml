@@ -1,17 +1,17 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: extract-wallets-v3
+  name: reanalyze-performance
   namespace: crypto-monitoring
 spec:
   template:
     spec:
       containers:
-      - name: extract-wallets
-        image: crypto-backend:v3-final
+      - name: reanalyze
+        image: crypto-backend:v4-multisource
         imagePullPolicy: IfNotPresent
         command: ["node"]
-        args: ["dist/jobs/extractWallets.js"]
+        args: ["dist/jobs/reanalyzePerformance.js"]
         envFrom:
         - configMapRef:
             name: backend-config
@@ -22,10 +22,10 @@ spec:
           value: "development"
         resources:
           requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
             memory: "512Mi"
             cpu: "500m"
-          limits:
-            memory: "1Gi"
-            cpu: "1000m"
       restartPolicy: Never
   backoffLimit: 2

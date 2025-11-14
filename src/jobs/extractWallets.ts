@@ -41,12 +41,16 @@ async function extractAndAnalyzeWallets() {
     const topPerformers = await analyzer.getTopPerformers(10);
 
     topPerformers.forEach((perf, index) => {
+      const score = typeof perf.performanceScore === 'string' ? parseFloat(perf.performanceScore) : perf.performanceScore;
+      const profitLoss = typeof perf.profitLossPercentage === 'string' ? parseFloat(perf.profitLossPercentage) : perf.profitLossPercentage;
+      const winRate = typeof perf.winRate === 'string' ? parseFloat(perf.winRate) : perf.winRate;
+
       logger.info(
         `${index + 1}. ${perf.wallet.address.substring(0, 10)}... ` +
         `(${perf.wallet.cryptoType}) - ` +
-        `Score: ${perf.performanceScore.toFixed(2)}, ` +
-        `P/L: ${perf.profitLossPercentage.toFixed(2)}%, ` +
-        `Win Rate: ${perf.winRate.toFixed(2)}%`
+        `Score: ${score.toFixed(2)}, ` +
+        `P/L: ${profitLoss.toFixed(2)}%, ` +
+        `Win Rate: ${winRate.toFixed(2)}%`
       );
     });
 

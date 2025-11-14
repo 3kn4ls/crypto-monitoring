@@ -80,12 +80,17 @@ export class PerformanceAnalyzer {
       performance.winRate = metrics.winRate;
       performance.avgHoldingPeriodDays = metrics.avgHoldingPeriodDays;
       performance.performanceScore = metrics.performanceScore;
+      performance.transactionsWithPrice = metrics.transactionsWithPrice;
+      performance.totalTransactions = metrics.totalTransactions;
+      performance.dataQualityScore = metrics.dataQualityScore;
+      performance.dataQuality = metrics.dataQuality;
 
       await this.performanceRepo.save(performance);
 
       logger.info(
         `Wallet ${wallet.address}: Score ${metrics.performanceScore.toFixed(2)}, ` +
-        `P/L ${metrics.profitLossPercentage.toFixed(2)}%`
+        `P/L ${metrics.profitLossPercentage.toFixed(2)}%, ` +
+        `Data Quality: ${metrics.dataQuality} (${metrics.dataQualityScore.toFixed(1)}%)`
       );
 
       return performance;
@@ -99,6 +104,10 @@ export class PerformanceAnalyzer {
    * Calcula métricas de rendimiento basadas en transacciones
    */
   private calculateMetrics(transactions: Transaction[], wallet: Wallet): PerformanceMetrics {
+    // Umbral mínimo para considerar transacciones (0.01 USD o equivalente en crypto)
+    // Esto evita porcentajes extremos por transacciones de polvo/spam
+    const MIN_TRANSACTION_USD = 0.01;
+
     let totalInflowsUsd = 0;
     let totalOutflowsUsd = 0;
     let totalInflows = 0;
@@ -106,6 +115,10 @@ export class PerformanceAnalyzer {
     let buyCount = 0;
     let sellCount = 0;
     const holdingPeriods: number[] = [];
+
+    // Métricas de calidad de datos
+    let transactionsWithPrice = 0;
+    const totalTransactions = transactions.length;
 
     // Agrupar compras y ventas
     const buys: Transaction[] = [];
@@ -116,14 +129,27 @@ export class PerformanceAnalyzer {
       const amount = typeof tx.amount === 'string' ? parseFloat(tx.amount) : tx.amount;
       const amountUsd = tx.amountUsd ? (typeof tx.amountUsd === 'string' ? parseFloat(tx.amountUsd) : tx.amountUsd) : 0;
 
+      // Contar transacciones con precio USD disponible
+      if (amountUsd >= MIN_TRANSACTION_USD) {
+        transactionsWithPrice++;
+      }
+
+      // Filtrar transacciones muy pequeñas (polvo/spam) y transacciones sin precio histórico
+      // Solo incluir transacciones con valor USD >= $0.01
+      const isSignificant = amountUsd >= MIN_TRANSACTION_USD;
+
       if (tx.type === TransactionType.BUY || tx.type === TransactionType.TRANSFER_IN) {
         totalInflows += amount;
-        totalInflowsUsd += amountUsd;
+        if (isSignificant) {
+          totalInflowsUsd += amountUsd;
+        }
         buyCount++;
         buys.push(tx);
       } else if (tx.type === TransactionType.SELL || tx.type === TransactionType.TRANSFER_OUT) {
         totalOutflows += amount;
-        totalOutflowsUsd += amountUsd;
+        if (isSignificant) {
+          totalOutflowsUsd += amountUsd;
+        }
         sellCount++;
         sells.push(tx);
       }
@@ -161,13 +187,24 @@ export class PerformanceAnalyzer {
 
     // Calcular P/L: (valor actual + lo que se vendió) - lo que se compró
     // Si tenemos precios históricos en USD, usarlos; sino, fallback a cálculo con balance
-    const profitLossUsd = totalInflowsUsd > 0 || totalOutflowsUsd > 0
+    let profitLossUsd = totalInflowsUsd > 0 || totalOutflowsUsd > 0
       ? (currentValue + totalOutflowsUsd - totalInflowsUsd)
       : (currentValue + totalOutflows - totalInflows);
 
-    const profitLossPercentage = totalInflowsUsd > 0
-      ? (profitLossUsd / totalInflowsUsd) * 100
-      : (totalInflows > 0 ? ((currentValue + totalOutflows - totalInflows) / totalInflows) * 100 : 0);
+    // Limitar a valores razonables para evitar overflow (decimal(20,2) max: ±99,999,999,999,999,999.99)
+    profitLossUsd = Math.max(-99999999999999999.99, Math.min(99999999999999999.99, profitLossUsd));
+
+    // Calcular P/L percentage con límites razonables
+    let profitLossPercentage = 0;
+    if (totalInflowsUsd > 0) {
+      profitLossPercentage = (profitLossUsd / totalInflowsUsd) * 100;
+    } else if (totalInflows > 0) {
+      profitLossPercentage = ((currentValue + totalOutflows - totalInflows) / totalInflows) * 100;
+    }
+
+    // Limitar a valores razonables para evitar overflow en BD
+    // Máximo: ±999,999,999.99% (límite de decimal(15,2))
+    profitLossPercentage = Math.max(-999999999.99, Math.min(999999999.99, profitLossPercentage));
 
     // Calcular score de rendimiento mejorado
     const volumeUsd = totalInflowsUsd + totalOutflowsUsd;
@@ -180,6 +217,24 @@ export class PerformanceAnalyzer {
       volume: volumeUsd > 0 ? volumeUsd : (totalInflows + totalOutflows),
     });
 
+    // Calcular métricas de calidad de datos
+    const dataQualityScore = totalTransactions > 0
+      ? (transactionsWithPrice / totalTransactions) * 100
+      : 0;
+
+    let dataQuality = 'unknown';
+    if (dataQualityScore >= 80) {
+      dataQuality = 'excellent'; // >80% de transacciones con precio
+    } else if (dataQualityScore >= 50) {
+      dataQuality = 'good'; // 50-80%
+    } else if (dataQualityScore >= 20) {
+      dataQuality = 'fair'; // 20-50%
+    } else if (dataQualityScore >= 10) {
+      dataQuality = 'poor'; // 10-20%
+    } else {
+      dataQuality = 'insufficient'; // <10%
+    }
+
     return {
       profitLossPercentage,
       profitLossUsd,
@@ -190,6 +245,10 @@ export class PerformanceAnalyzer {
       winRate,
       avgHoldingPeriodDays,
       performanceScore,
+      transactionsWithPrice,
+      totalTransactions,
+      dataQualityScore,
+      dataQuality,
     };
   }
 
@@ -242,6 +301,10 @@ export class PerformanceAnalyzer {
       winRate: 0,
       avgHoldingPeriodDays: 0,
       performanceScore: 0,
+      transactionsWithPrice: 0,
+      totalTransactions: 0,
+      dataQualityScore: 0,
+      dataQuality: 'unknown',
     });
 
     return performance;
